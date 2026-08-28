@@ -4,13 +4,20 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Business Email Finder</title>
-  <link rel="stylesheet" href="styles.css">
+  
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="styles.css">
+  
+  <!-- SheetJS for Excel Export -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
+  <!-- Navigation Bar -->
   <header class="navbar">
     <div class="nav-container">
       <div class="brand">
@@ -26,6 +33,7 @@
 
   <main class="main-container">
     
+    <!-- KPI Counters -->
     <section class="stats-grid">
       <div class="stat-card">
         <span class="stat-label">Total Searches</span>
@@ -45,25 +53,27 @@
       </div>
     </section>
 
-    <div id="api-modal" class="modal">
+    <!-- API Key Settings Modal (Hidden by Default) -->
+    <div id="api-modal" class="modal" style="display: none;">
       <div class="modal-content">
         <h3>Live Search API Configuration</h3>
-        <p class="subtext">Agar live Google data chahiye to SerpAPI key enter karein (optional). Key aapke browser mein secure save rahegi.</p>
-        <div class="form-group" style="margin-top: 12px;">
-          <label>SerpAPI Key:</label>
+        <p class="modal-subtext">Agar live Google search data chahiye to SerpAPI key enter karein (optional). Key aapke browser mein secure save rahegi.</p>
+        <div class="form-group" style="margin-top: 14px;">
+          <label for="serpapi-key-input">SerpAPI Key:</label>
           <input type="password" id="serpapi-key-input" placeholder="Enter SerpAPI Key...">
         </div>
         <div class="modal-actions">
-          <button class="btn btn-primary" id="btn-save-key">Save Key</button>
-          <button class="btn btn-secondary" id="btn-close-modal">Close</button>
+          <button type="button" class="btn btn-primary" id="btn-save-key">Save Key</button>
+          <button type="button" class="btn btn-secondary" id="btn-close-modal">Close</button>
         </div>
       </div>
     </div>
 
+    <!-- Search Form Card -->
     <section class="card form-card">
       <div class="card-header">
         <h2>Find Professional Business Contacts</h2>
-        <p>Public business directories aur web pages se verified business emails extract karein.</p>
+        <p>Public business directories aur web search results se corporate emails extract karein.</p>
       </div>
       
       <form id="search-form">
@@ -109,8 +119,8 @@
               <label for="email-type">Email Filter</label>
               <select id="email-type">
                 <option value="all">All Public Emails</option>
-                <option value="individual">Personal/Direct Professional</option>
-                <option value="generic">Generic (info@, sales@)</option>
+                <option value="individual">Personal/Direct Professional Only</option>
+                <option value="generic">Generic (info@, sales@) Only</option>
               </select>
             </div>
           </div>
@@ -129,6 +139,7 @@
       </form>
     </section>
 
+    <!-- Results Table Section -->
     <section class="card results-card" id="results-card" style="display: none;">
       <div class="results-header">
         <div>
@@ -136,9 +147,9 @@
         </div>
         <div class="results-toolbar">
           <input type="text" id="table-filter" placeholder="Filter results..." class="table-search-box">
-          <button class="btn btn-secondary" id="btn-copy-all">Copy All Emails</button>
-          <button class="btn btn-secondary" id="btn-export-csv">Export CSV</button>
-          <button class="btn btn-secondary" id="btn-export-excel">Export Excel</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-copy-all">Copy All Emails</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-export-csv">Export CSV</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-export-excel">Export Excel</button>
         </div>
       </div>
 
@@ -164,6 +175,7 @@
 
   </main>
 
+  <!-- JavaScript -->
   <script src="app.js"></script>
 </body>
 </html>

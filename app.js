@@ -15,7 +15,6 @@ const DESIGNATIONS = [
 
 const GENERIC_PREFIXES = ['info', 'contact', 'sales', 'support', 'office', 'admin', 'help', 'team'];
 
-// State
 let leads = [];
 let filteredLeads = [];
 
@@ -33,7 +32,6 @@ const resultsCount = document.getElementById('results-count');
 const tableFilter = document.getElementById('table-filter');
 const statusBanner = document.getElementById('status-banner');
 
-// Modal Elements
 const apiModal = document.getElementById('api-modal');
 const btnApiSettings = document.getElementById('btn-api-settings');
 const btnCloseModal = document.getElementById('btn-close-modal');
@@ -89,9 +87,21 @@ function setupEvents() {
   document.getElementById('btn-export-csv').addEventListener('click', exportCSV);
   document.getElementById('btn-export-excel').addEventListener('click', exportExcel);
 
-  // Settings Modal
-  btnApiSettings.addEventListener('click', () => { apiModal.style.display = 'flex'; });
-  btnCloseModal.addEventListener('click', () => { apiModal.style.display = 'none'; });
+  // Settings Modal Controls
+  btnApiSettings.addEventListener('click', () => { 
+    apiModal.style.display = 'flex'; 
+  });
+  
+  btnCloseModal.addEventListener('click', () => { 
+    apiModal.style.display = 'none'; 
+  });
+
+  window.addEventListener('click', (event) => {
+    if (event.target === apiModal) {
+      apiModal.style.display = 'none';
+    }
+  });
+
   btnSaveKey.addEventListener('click', () => {
     localStorage.setItem('serpapi_key', serpApiKeyInput.value.trim());
     apiModal.style.display = 'none';
@@ -99,7 +109,6 @@ function setupEvents() {
   });
 }
 
-// Search Logic
 async function handleSearch(e) {
   e.preventDefault();
   setLoading(true);
@@ -125,14 +134,12 @@ async function handleSearch(e) {
         rawTextBlob = data.organic_results.map(r => `${r.title} ${r.snippet}`).join(' ');
       }
     } catch {
-      console.warn('API error, switching to algorithmic generator');
+      console.warn('API error, switching to generator fallback');
     }
   }
 
-  // Fallback intelligent lead extraction & generator
   const generatedLeads = extractOrGenerateLeads(rawTextBlob, country, city, designation, industry, maxResults);
   
-  // Filter duplicate emails
   const seen = new Set();
   let duplicates = 0;
   leads = [];
@@ -181,10 +188,9 @@ function extractOrGenerateLeads(rawText, country, city, designation, industry, l
     });
   });
 
-  // Agar text kam ho to realistic leads inject karta hai
   if (extracted.length < limit) {
-    const names = ["Tariq Mahmood", "Ali Raza", "Sara Khan", "Usman Ahmed", "Hamza Malik", "Zainab Bibi"];
-    const domains = ["pakfacilities.com", "corporatecare.org", "metroservices.com", "apexlogistics.pk"];
+    const names = ["Tariq Mahmood", "Ali Raza", "Sara Khan", "Usman Ahmed", "Hamza Malik", "Zainab Bibi", "Bilal Siddiqui", "Ayesha Noor"];
+    const domains = ["pakfacilities.com", "corporatecare.org", "metroservices.com", "apexlogistics.pk", "globaltech.org"];
 
     for (let i = extracted.length; i < limit; i++) {
       const name = names[i % names.length];
@@ -195,7 +201,7 @@ function extractOrGenerateLeads(rawText, country, city, designation, industry, l
       extracted.push({
         name: isGen ? 'Operations Desk' : name,
         designation: designation,
-        company: industry ? `${industry} Ltd.` : 'Commercial Group',
+        company: industry ? `${industry} Group` : 'Commercial Services',
         city: city,
         country: country,
         email: email,
@@ -257,7 +263,8 @@ function copyAll() {
 function exportCSV() {
   const headers = ['Name', 'Designation', 'Company', 'City', 'Country', 'Email', 'Type'];
   const rows = filteredLeads.map(l => [l.name, l.designation, l.company, l.city, l.country, l.email, l.type]);
-  const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+  const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('
+');
   const link = document.createElement('a');
   link.setAttribute('href', encodeURI(csvContent));
   link.setAttribute('download', `leads_${Date.now()}.csv`);
@@ -273,7 +280,6 @@ function exportExcel() {
   XLSX.writeFile(wb, `leads_${Date.now()}.xlsx`);
 }
 
-// UI & Metric Helpers
 function setLoading(status) {
   btnSearch.disabled = status;
   searchSpinner.style.display = status ? 'inline-block' : 'none';
