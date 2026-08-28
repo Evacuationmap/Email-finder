@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Business Email Finder</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+  <header class="navbar">
+    <div class="nav-container">
+      <div class="brand">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+          <polyline points="22,6 12,13 2,6"></polyline>
+        </svg>
+        <span>Business Email Finder</span>
+      </div>
+      <button class="btn btn-secondary btn-sm" id="btn-api-settings">⚙️ API Settings</button>
+    </div>
+  </header>
+
+  <main class="main-container">
+    
+    <section class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-label">Total Searches</span>
+        <h3 id="stat-searches" class="stat-value">0</h3>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Emails Found</span>
+        <h3 id="stat-emails" class="stat-value">0</h3>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Valid Emails</span>
+        <h3 id="stat-valid" class="stat-value">0</h3>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Duplicates Removed</span>
+        <h3 id="stat-duplicates" class="stat-value">0</h3>
+      </div>
+    </section>
+
+    <div id="api-modal" class="modal">
+      <div class="modal-content">
+        <h3>Live Search API Configuration</h3>
+        <p class="subtext">Agar live Google data chahiye to SerpAPI key enter karein (optional). Key aapke browser mein secure save rahegi.</p>
+        <div class="form-group" style="margin-top: 12px;">
+          <label>SerpAPI Key:</label>
+          <input type="password" id="serpapi-key-input" placeholder="Enter SerpAPI Key...">
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" id="btn-save-key">Save Key</button>
+          <button class="btn btn-secondary" id="btn-close-modal">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <section class="card form-card">
+      <div class="card-header">
+        <h2>Find Professional Business Contacts</h2>
+        <p>Public business directories aur web pages se verified business emails extract karein.</p>
+      </div>
+      
+      <form id="search-form">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="country-select">Country <span class="req">*</span></label>
+            <select id="country-select" required>
+              <option value="">Select Country</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="city-select">City <span class="req">*</span></label>
+            <select id="city-select" required disabled>
+              <option value="">Select Country First</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="designation-input">Job Role / Designation <span class="req">*</span></label>
+            <input type="text" id="designation-input" list="designations-list" placeholder="e.g. Facility Manager" required>
+            <datalist id="designations-list"></datalist>
+          </div>
+
+          <div class="form-group">
+            <label for="industry-input">Company / Industry <span class="opt">(Optional)</span></label>
+            <input type="text" id="industry-input" placeholder="e.g. Hospital, Logistics">
+          </div>
+        </div>
+
+        <details class="advanced-controls">
+          <summary>Advanced Filter Parameters</summary>
+          <div class="advanced-grid">
+            <div class="form-group">
+              <label for="max-results">Max Results</label>
+              <select id="max-results">
+                <option value="10">10 contacts</option>
+                <option value="25" selected>25 contacts</option>
+                <option value="50">50 contacts</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="email-type">Email Filter</label>
+              <select id="email-type">
+                <option value="all">All Public Emails</option>
+                <option value="individual">Personal/Direct Professional</option>
+                <option value="generic">Generic (info@, sales@)</option>
+              </select>
+            </div>
+          </div>
+        </details>
+
+        <div class="form-actions">
+          <button type="submit" id="btn-search" class="btn btn-primary">
+            <span class="btn-text">Search Emails</span>
+            <div class="spinner" id="search-spinner"></div>
+          </button>
+        </div>
+
+        <p class="compliance-notice">
+          <strong>Compliance Notice:</strong> This tool finds publicly available business contact information. Users are responsible for complying with applicable privacy, anti-spam, and data-protection laws.
+        </p>
+      </form>
+    </section>
+
+    <section class="card results-card" id="results-card" style="display: none;">
+      <div class="results-header">
+        <div>
+          <h2>Discovered Contacts (<span id="results-count">0</span>)</h2>
+        </div>
+        <div class="results-toolbar">
+          <input type="text" id="table-filter" placeholder="Filter results..." class="table-search-box">
+          <button class="btn btn-secondary" id="btn-copy-all">Copy All Emails</button>
+          <button class="btn btn-secondary" id="btn-export-csv">Export CSV</button>
+          <button class="btn btn-secondary" id="btn-export-excel">Export Excel</button>
+        </div>
+      </div>
+
+      <div id="status-banner" class="status-banner"></div>
+
+      <div class="table-responsive">
+        <table class="leads-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Designation</th>
+              <th>Company</th>
+              <th>Location</th>
+              <th>Email</th>
+              <th>Type</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="leads-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
