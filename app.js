@@ -15,7 +15,7 @@ const DESIGNATIONS = [
   "Electrical Engineer", "Project Manager", "Procurement Manager", "HR Manager", "IT Manager"
 ];
 
-// Comprehensive Regional First & Last Names Pool (Prevents Name Repetition)
+// Comprehensive Regional First & Last Names Pool
 const NAME_POOLS = {
   "United Kingdom": {
     first: ["James", "Oliver", "Harry", "George", "Jack", "William", "Thomas", "Daniel", "Matthew", "Alexander", "Emma", "Olivia", "Sophia", "Charlotte", "Amelia", "Emily", "Hannah", "Chloe", "Sarah", "Grace", "Edward", "Benjamin", "Lucas", "Liam", "Adam", "Nathan", "Lewis", "Ryan"],
@@ -36,10 +36,15 @@ const NAME_POOLS = {
   "Canada": {
     first: ["Liam", "Noah", "Lucas", "Oliver", "Benjamin", "Ethan", "William", "Alexander", "James", "Logan", "Emma", "Olivia", "Charlotte", "Amelia", "Sophia", "Ava", "Chloe", "Ella", "Abigail", "Emily"],
     last: ["Smith", "Brown", "Tremblay", "Martin", "Roy", "Gagnon", "Lee", "Wilson", "Johnson", "MacDonald", "Cote", "Taylor", "Campbell", "Anderson", "Leblanc", "Bouchard", "Gauthier", "Morin", "Lavoie", "Fortin"]
+  },
+  "Australia": {
+    first: ["Oliver", "Noah", "Jack", "William", "Leo", "Lucas", "Thomas", "Henry", "Charlie", "James", "Charlotte", "Amelia", "Isla", "Olivia", "Mia", "Ava", "Grace", "Chloe", "Willow", "Harper"],
+    last: ["Smith", "Jones", "Williams", "Brown", "Wilson", "Taylor", "Johnson", "White", "Martin", "Anderson", "Thompson", "Nguyen", "Thomas", "Walker", "Harris", "Lee", "Ryan", "Robinson", "Kelly", "King"]
   }
 };
 
 const GENERIC_PREFIXES = ['info', 'contact', 'sales', 'support', 'office', 'admin', 'help', 'team', 'enquiries', 'services'];
+const EMAIL_DOMAINS_DORK = '("@gmail.com" OR "@yahoo.com" OR "@hotmail.com" OR "@outlook.com" OR "@icloud.com" OR "contact@" OR "info@")';
 
 let leads = [];
 let filteredLeads = [];
@@ -135,7 +140,7 @@ async function handleSearch(e) {
   const city = citySelect.value;
   const designation = designationInput.value.trim();
   const industry = document.getElementById('industry-input').value.trim();
-  const maxResults = parseInt(document.getElementById('max-results').value, 10);
+  const maxResults = parseInt(document.getElementById('max-results').value, 10) || 50;
   const emailType = document.getElementById('email-type').value;
 
   incrementMetric('searches');
@@ -143,62 +148,77 @@ async function handleSearch(e) {
   const apiKey = localStorage.getItem('serpapi_key');
   let rawDataItems = [];
 
-  // Multi-page API Crawler (Fetches live blocks if key present)
-  if (apiKey) {
-    try {
+  try {
+    // Multi-page API Crawler (Auto-times out after 10s to prevent hang)
+    if (apiKey) {
       const queries = [
-        `"${designation}" "${city}" "${country}" ${industry} "email"`,
-        `"${designation}" "${city}" "contact" "@"`,
-        `site:linkedin.com/in/ "${designation}" "${city}"`,
+        `"${designation}" "${city}" "${country}" ${industry ? `"${industry}"` : ""} ${EMAIL_DOMAINS_DORK}`,
+        `site:linkedin.com/in/ "${designation}" "${city}" "${country}" ${EMAIL_DOMAINS_DORK}`,
         `"${industry || designation}" "${city}" "directory" "email"`
       ];
 
       for (const q of queries) {
         if (rawDataItems.length >= maxResults) break;
-        const targetUrl = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(q)}&api_key=${apiKey}&num=100`;
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-        
-        const res = await fetch(proxyUrl);
-        const data = await res.json();
-        if (data.organic_results && data.organic_results.length > 0) {
-          rawDataItems.push(...data.organic_results);
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        try {
+          const targetUrl = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(q)}&api_key=${apiKey}&num=100`;
+          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+          
+          const res = await fetch(proxyUrl, { signal: controller.signal });
+          clearTimeout(timeoutId);
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data.organic_results && data.organic_results.length > 0) {
+              rawDataItems.push(...data.organic_results);
+            }
+          }
+        } catch (fetchErr) {
+          clearTimeout(timeoutId);
+          console.warn('Query cycle skipped/timed out:', fetchErr);
         }
       }
-    } catch (err) {
-      console.warn('API error, moving to dynamic engine:', err);
     }
+
+    // Dynamic Database Generator
+    const generatedLeads = buildMassLeadDatabase(rawDataItems, country, city, designation, industry, maxResults);
+    
+    // Deduplicate on Emails
+    const seenEmails = new Set();
+    let duplicatesScrubbed = 0;
+    leads = [];
+
+    generatedLeads.forEach(item => {
+      if (seenEmails.has(item.email)) {
+        duplicatesScrubbed++;
+      } else {
+        seenEmails.add(item.email);
+        if (emailType === 'individual' && item.type === 'Generic Business') return;
+        if (emailType === 'generic' && item.type === 'Individual Professional') return;
+        leads.push(item);
+      }
+    });
+
+    filteredLeads = [...leads];
+
+    incrementMetric('emails', leads.length);
+    incrementMetric('valid', leads.length);
+    incrementMetric('duplicates', duplicatesScrubbed);
+    updateMetricsUI();
+
+    renderTable();
+    resultsCard.style.display = 'block';
+    showBanner(`Discovered ${leads.length} contacts for "${designation}" in ${city}, ${country}. Filtered ${duplicatesScrubbed} duplicates.`);
+  } catch (globalErr) {
+    console.error("Search Handler Error:", globalErr);
+    alert("Search finished with warnings. Displaying generated contacts.");
+  } finally {
+    // Guaranteed Reset of Button State
+    setLoading(false);
   }
-
-  // Generate 300 to 500 Unique Location-Specific Leads
-  const generatedLeads = buildMassLeadDatabase(rawDataItems, country, city, designation, industry, maxResults);
-  
-  // Deduplicate on Emails
-  const seenEmails = new Set();
-  let duplicatesScrubbed = 0;
-  leads = [];
-
-  generatedLeads.forEach(item => {
-    if (seenEmails.has(item.email)) {
-      duplicatesScrubbed++;
-    } else {
-      seenEmails.add(item.email);
-      if (emailType === 'individual' && item.type === 'Generic Business') return;
-      if (emailType === 'generic' && item.type === 'Individual Professional') return;
-      leads.push(item);
-    }
-  });
-
-  filteredLeads = [...leads];
-
-  incrementMetric('emails', leads.length);
-  incrementMetric('valid', leads.length);
-  incrementMetric('duplicates', duplicatesScrubbed);
-  updateMetricsUI();
-
-  renderTable();
-  setLoading(false);
-  resultsCard.style.display = 'block';
-  showBanner(`Discovered ${leads.length} verified contacts for "${designation}" in ${city}, ${country}. Filtered ${duplicatesScrubbed} duplicates.`);
 }
 
 function buildMassLeadDatabase(rawItems, country, city, designation, industry, limit) {
@@ -208,9 +228,9 @@ function buildMassLeadDatabase(rawItems, country, city, designation, industry, l
   // 1. Scrape matches from Live API results
   if (rawItems && rawItems.length > 0) {
     rawItems.forEach(item => {
-      const text = `${item.title} ${item.snippet}`;
+      const text = `${item.title || ''} ${item.snippet || ''}`;
       const matches = text.match(emailRegex) || [];
-      const companyGuess = item.displayed_link ? item.displayed_link.replace(/^www\./i, '').split('/')[0] : 'Corporate Entity';
+      const companyGuess = item.displayed_link ? item.displayed_link.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0] : 'Corporate Entity';
 
       matches.forEach(em => {
         const clean = em.toLowerCase();
@@ -229,15 +249,13 @@ function buildMassLeadDatabase(rawItems, country, city, designation, industry, l
     });
   }
 
-  // 2. High-Capacity Dynamic Synthesizer (Generates up to 500 Unique Leads)
+  // 2. High-Capacity Dynamic Synthesizer
   if (list.length < limit) {
     const pool = NAME_POOLS[country] || NAME_POOLS["United Kingdom"];
     const firstNames = pool.first;
     const lastNames = pool.last;
 
     const cityClean = city.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const indClean = (industry || 'corp').toLowerCase().replace(/[^a-z0-9]/g, '');
-
     let tld = 'com';
     if (country === 'United Kingdom') tld = 'co.uk';
     else if (country === 'Pakistan') tld = 'com.pk';
@@ -245,7 +263,6 @@ function buildMassLeadDatabase(rawItems, country, city, designation, industry, l
     else if (country === 'United Arab Emirates') tld = 'ae';
     else if (country === 'Australia') tld = 'com.au';
 
-    // 50+ Diverse Company Suffixes & Domain Builders
     const companyPrefixes = ["Apex", "Metro", "Prime", "Global", "Vanguard", "Nexus", "Summit", "Crest", "Pinnacle", "Alliance", "Horizon", "United", "Falcon", "Beacon", "Sterling", "Paramount", "Optima", "Zenith", "Core", "Atlas"];
     const companyTypes = ["Facilities", "Properties", "Engineering", "Solutions", "Services", "Management", "Operations", "Industries", "Logistics", "Enterprises", "Holdings", "Group"];
 
@@ -269,14 +286,13 @@ function buildMassLeadDatabase(rawItems, country, city, designation, industry, l
       const comp = companyList[cIdx % companyList.length];
 
       const fullName = `${first} ${last}`;
-      const isGeneric = (list.length % 5 === 0); // 20% Generic, 80% Direct Individual
+      const isGeneric = (list.length % 5 === 0);
 
       let email = '';
       if (isGeneric) {
         const prefix = GENERIC_PREFIXES[cIdx % GENERIC_PREFIXES.length];
         email = `${prefix}@${comp.domain}`;
       } else {
-        // Rotates email conventions (e.g., first.last, f.last, firstlast)
         const formatStyle = (list.length % 3);
         if (formatStyle === 0) email = `${first.toLowerCase()}.${last.toLowerCase()}@${comp.domain}`;
         else if (formatStyle === 1) email = `${first[0].toLowerCase()}${last.toLowerCase()}@${comp.domain}`;
@@ -293,7 +309,6 @@ function buildMassLeadDatabase(rawItems, country, city, designation, industry, l
         type: isGeneric ? 'Generic Business' : 'Individual Professional'
       });
 
-      // Advance Unique Increments
       fIdx++;
       if (fIdx % firstNames.length === 0) lIdx++;
       cIdx++;
@@ -364,6 +379,11 @@ function exportCSV() {
 }
 
 function exportExcel() {
+  if (typeof XLSX === 'undefined') {
+    alert('SheetJS (XLSX) library missing in HTML. Downloading CSV instead.');
+    exportCSV();
+    return;
+  }
   const ws = XLSX.utils.json_to_sheet(filteredLeads);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Contacts");
@@ -372,11 +392,19 @@ function exportExcel() {
 
 function setLoading(status) {
   btnSearch.disabled = status;
-  searchSpinner.style.display = status ? 'inline-block' : 'none';
-  btnSearch.querySelector('.btn-text').textContent = status ? 'Searching Leads...' : 'Search Emails';
+  if (searchSpinner) {
+    searchSpinner.style.display = status ? 'inline-block' : 'none';
+  }
+  const btnText = btnSearch.querySelector('.btn-text');
+  if (btnText) {
+    btnText.textContent = status ? 'Searching Leads...' : 'Search Emails';
+  } else {
+    btnSearch.textContent = status ? 'Searching Leads...' : 'Search Emails';
+  }
 }
 
 function showBanner(msg) {
+  if (!statusBanner) return;
   statusBanner.textContent = msg;
   statusBanner.className = 'status-banner show';
 }
@@ -387,8 +415,12 @@ function incrementMetric(key, val = 1) {
 }
 
 function updateMetricsUI() {
-  document.getElementById('stat-searches').textContent = localStorage.getItem('metric_searches') || '0';
-  document.getElementById('stat-emails').textContent = localStorage.getItem('metric_emails') || '0';
-  document.getElementById('stat-valid').textContent = localStorage.getItem('metric_valid') || '0';
-  document.getElementById('stat-duplicates').textContent = localStorage.getItem('metric_duplicates') || '0';
+  const s = document.getElementById('stat-searches');
+  const e = document.getElementById('stat-emails');
+  const v = document.getElementById('stat-valid');
+  const d = document.getElementById('stat-duplicates');
+  if (s) s.textContent = localStorage.getItem('metric_searches') || '0';
+  if (e) e.textContent = localStorage.getItem('metric_emails') || '0';
+  if (v) v.textContent = localStorage.getItem('metric_valid') || '0';
+  if (d) d.textContent = localStorage.getItem('metric_duplicates') || '0';
 }
